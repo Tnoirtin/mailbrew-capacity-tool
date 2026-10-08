@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAILBREW - SPRINT CAPACITY TOOL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-slate-900">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="mb-8 flex justify-between items-center border-b border-slate-200 pb-6">
+            <div>
+                <h1 class="text-3xl font-black text-slate-800 tracking-tight">MAILBREW — CAPACITY TOOL</h1>
+                <p class="text-slate-500 text-sm italic font-medium">Calcul du capacitif réel pour Sprints de 3 semaines</p>
+            </div>
+        </header>
+
+        <!-- PARAMÈTRES GLOBAUX -->
+        <div class="card p-6 mb-8 border-l-8 border-blue-600">
+            <h2 class="text-xs font-black uppercase tracking-widest mb-4 text-blue-600">Paramètres Globaux du Produit</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Vélocité Moyenne (Pts)</label>
+                    <input type="number" id="globalVelocity" value="84" oninput="updateAll()" class="w-full border-2 border-slate-100 rounded-xl p-3 text-2xl font-black focus:border-blue-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Durée Sprint (Jours)</label>
+                    <input type="number" id="daysPerSprint" value="15" oninput="updateAll()" class="w-full border-2 border-slate-100 rounded-xl p-3 text-2xl font-black focus:border-blue-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Total Jours RUN / Sprint</label>
+                    <input type="number" id="runDaysPerSprint" value="15" oninput="updateAll()" class="w-full border-2 border-slate-100 rounded-xl p-3 text-2xl font-black focus:border-blue-500 outline-none transition">
+                </div>
+                <div class="flex items-center">
+                    <div class="bg-blue-50 px-4 py-3 rounded-xl border border-blue-100 w-full">
+                        <span class="text-[10px] font-bold text-blue-400 uppercase block">Ratio de BUILD</span>
+                        <span id="currentRatio" class="text-2xl font-black text-blue-700">2.800</span> 
+                        <span class="text-blue-700 font-bold text-[10px] italic uppercase block">pts / jour de BUILD</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MEMBRES DE L'ÉQUIPE -->
+        <div class="card p-6 mb-10">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xs font-black uppercase tracking-widest text-slate-400">Équipe Dev Mailbrew</h2>
+                <button onclick="addDeveloper()" class="text-blue-600 hover:underline text-xs font-black uppercase">+ Ajouter un Dev</button>
+            </div>
+            <div id="devList" class="flex flex-wrap gap-3"></div>
+        </div>
+
+        <!-- ENTÊTE HISTORIQUE -->
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Planification des Sprints</h2>
+            <button onclick="addNewSprint()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl shadow-xl shadow-blue-200 font-black transition transform hover:-translate-y-1">Nouveau Sprint</button>
+        </div>
+
+        <!-- CONTENEUR DES SPRINTS -->
+        <div id="sprintsContainer" class="space-y-12 mb-20"></div>
+
+        <footer class="mt-20 border-t border-slate-200 py-10 text-center text-xs text-slate-400">
+            © Mailbrew Capacity Tool — Basé sur la capacité réelle de BUILD
+        </footer>
+    </div>
+
+    <script>
+        let appData = {
+            velocity: 84,
+            days: 15,
+            runDays: 15,
+            developers: [
+                { id: 1, name: "Dev Front", role: "FRONT" },
+                { id: 2, name: "Dev Fullstack 1", role: "FULLSTACK" },
+                { id: 3, name: "Dev Fullstack 2", role: "FULLSTACK" }
+            ],
+            sprints: []
+        };
+
+        function init() {
+            const saved = localStorage.getItem('mailbrew_capacitif_v1');
+            if (saved) {
+                appData = JSON.parse(saved);
+                document.getElementById('globalVelocity').value = appData.velocity || 84;
+                document.getElementById('daysPerSprint').value = appData.days || 15;
+                document.getElementById('runDaysPerSprint').value = appData.runDays || 15;
+            }
+            renderDevs();
+            updateRatioDisplay();
+            renderSprints();
+        }
+
+        function save() { 
+            localStorage.setItem('mailbrew_capacitif_v1', JSON.stringify(appData)); 
+        }
+
+        function getRatio() {
+            const totalNominalDays = appData.developers.length * appData.days;
+            const nominalBuildDays = totalNominalDays - appData.runDays;
+            return nominalBuildDays > 0 ? (appData.velocity / nominalBuildDays) : 0;
+        }
+
+        function updateRatioDisplay() {
+            const ratio = getRatio();
+            document.getElementById('currentRatio').innerText = ratio.toFixed(3);
+            return ratio;
+        }
+
+        function updateAll() {
+            appData.velocity = parseFloat(document.getElementById('globalVelocity').value) || 0;
+            appData.days = parseFloat(document.getElementById('daysPerSprint').value) || 1;
+            appData.runDays = parseFloat(document.getElementById('runDaysPerSprint').value) || 0;
+            updateRatioDisplay();
+            renderSprints();
+            save();
+        }
+
+        function addDeveloper() {
+            const name = prompt("Nom du développeur :");
+            if (!name) return;
+            const isFront = confirm("Est-ce un profil purement FRONT ? (Annuler = Full-stack)");
+            appData.developers.push({
+                id: Date.now(),
+                name: name,
+                role: isFront ? "FRONT" : "FULLSTACK"
+            });
+            renderDevs();
+            updateAll();
+        }
+
+        function removeDev(id) {
+            if(confirm("Supprimer ce membre de l'équipe ?")) {
+                appData.developers = appData.developers.filter(d => d.id !== id);
+                renderDevs();
+                updateAll();
+            }
+        }
+
+        function addNewSprint() {
+            const name = prompt("Nom du Sprint (ex: Sprint Auckland) :");
+            if (!name) return;
+            
+            const newSprint = {
+                id: Date.now(),
+                name: name,
+                data: appData.developers.map(dev => ({
+                    devId: dev.id,
+                    name: dev.name,
+                    role: dev.role,
+                    buildDays: appData.days - 5, // Par défaut 10 jours de BUILD (15j - 5j de RUN)
+                    isRunner: true, // Par défaut tout le monde fait 1 semaine de RUN par sprint
+                    reason: "RUN (1 sem. = -5j)"
+                }))
+            };
+            appData.sprints.unshift(newSprint);
+            renderSprints();
+            save();
+        }
+
+        function deleteSprint(id) {
+            if(confirm("Supprimer la planification de ce sprint ?")) {
+                appData.sprints = appData.sprints.filter(s => s.id !== id);
+                renderSprints();
+                save();
+            }
+        }
+
+        function toggleRunner(sprintId, devId) {
+            const sprint = appData.sprints.find(s => s.id === sprintId);
+            const devData = sprint.data.find(d => d.devId === devId);
+            devData.isRunner = !devData.isRunner;
+            
+            if (devData.isRunner) {
+                devData.buildDays = Math.max(0, appData.days - 5);
+                devData.reason = "RUN (1 sem. = -5j)";
+            } else {
+                devData.buildDays = appData.days;
+                devData.reason = "";
+            }
+            renderSprints();
+            save();
+        }
+
+        function updateBuildDays(sprintId, devId, value) {
+            const sprint = appData.sprints.find(s => s.id === sprintId);
+            const devData = sprint.data.find(d => d.devId === devId);
+            devData.buildDays = parseFloat(value) || 0;
+            renderSprints();
+            save();
+        }
+
+        function updateReason(sprintId, devId, value) {
+            const sprint = appData.sprints.find(s => s.id === sprintId);
+            const devData = sprint.data.find(d => d.devId === devId);
+            devData.reason = value;
+            save();
+        }
+
+        function renderDevs() {
+            const container = document.getElementById('devList');
+            container.innerHTML = appData.developers.map(dev => `
+                <span class="bg-white border-2 border-slate-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-3">
+                    ${dev.name} 
+                    <span class="text-[10px] px-2 py-0.5 rounded ${dev.role === 'FRONT' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} font-black">
+                        ${dev.role}
+                    </span>
+                    <button onclick="removeDev(${dev.id})" class="text-slate-300 hover:text-red-500 transition">✕</button>
+                </span>
+            `).join('');
+        }
+
+        function renderSprints() {
+            const container = document.getElementById('sprintsContainer');
+            if (appData.sprints.length === 0) {
+                container.innerHTML = '<p class="text-center text-slate-400 py-10 font-medium italic">Aucun sprint planifié. Clique sur "Nouveau Sprint" pour démarrer.</p>';
+                return;
+            }
+
+            const ratio = getRatio();
+            
+            container.innerHTML = appData.sprints.map(sprint => {
+                let totalPoints = 0;
+                let frontPoints = 0;
+                let fullstackPoints = 0;
+
+                const rows = sprint.data.map(d => {
+                    const pts = d.buildDays * ratio;
+                    totalPoints += pts;
+                    if (d.role === 'FRONT') frontPoints += pts;
+                    else fullstackPoints += pts;
+
+                    return `
+                        <tr class="border-b border-slate-50 transition-colors ${d.isRunner ? 'bg-orange-50/40' : ''}">
+                            <td class="py-4 px-2">
+                                <span class="font-black text-slate-700 block">${d.name}</span>
+                                <span class="text-[10px] font-bold ${d.role === 'FRONT' ? 'text-purple-600' : 'text-blue-600'}">${d.role}</span>
+                                ${d.isRunner ? '<span class="ml-2 text-[10px] font-black uppercase text-orange-500 tracking-tighter">⚡ Support Week</span>' : ''}
+                            </td>
+                            <td class="py-4 text-center">
+                                <input type="checkbox" ${d.isRunner ? 'checked' : ''} onchange="toggleRunner(${sprint.id}, ${d.devId})" class="w-5 h-5 accent-orange-500 cursor-pointer">
+                            </td>
+                            <td class="py-4">
+                                <input type="number" step="0.5" value="${d.buildDays}" onchange="updateBuildDays(${sprint.id}, ${d.devId}, this.value)" class="w-20 border-2 border-slate-100 rounded-lg p-2 text-center font-black focus:border-blue-500 outline-none">
+                            </td>
+                            <td class="py-4 font-black text-2xl text-blue-600 italic tracking-tighter">
+                                ${pts.toFixed(1)} <span class="text-xs text-slate-400 font-normal">pts</span>
+                            </td>
+                            <td class="py-4 px-2">
+                                <input type="text" placeholder="Note / Congés..." value="${d.reason || ''}" onchange="updateReason(${sprint.id}, ${d.devId}, this.value)" class="w-full bg-transparent border-b-2 border-slate-50 focus:border-blue-200 outline-none text-sm font-medium italic py-1 transition">
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="card p-8 border-t-8 border-slate-900 relative">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                            <div>
+                                <h3 class="text-4xl font-black text-slate-900 italic uppercase tracking-tighter">${sprint.name}</h3>
+                                <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">Planification du Capacitif</p>
+                            </div>
+                            
+                            <!-- RÉPARTITION CAPACITIF -->
+                            <div class="flex gap-4">
+                                <div class="bg-purple-50 border border-purple-100 text-purple-900 px-5 py-3 rounded-xl text-right">
+                                    <div class="text-[10px] font-black uppercase text-purple-400">Capacité FRONT</div>
+                                    <span class="text-2xl font-black">${frontPoints.toFixed(1)} <span class="text-sm font-normal">pts</span></span>
+                                </div>
+                                <div class="bg-blue-50 border border-blue-100 text-blue-900 px-5 py-3 rounded-xl text-right">
+                                    <div class="text-[10px] font-black uppercase text-blue-400">Capacité FULLSTACK</div>
+                                    <span class="text-2xl font-black">${fullstackPoints.toFixed(1)} <span class="text-sm font-normal">pts</span></span>
+                                </div>
+                                <div class="bg-blue-600 text-white px-6 py-3 rounded-xl shadow-lg shadow-blue-200 text-right">
+                                    <div class="text-[10px] font-black uppercase text-blue-200 opacity-80">Engagement TOTAL</div>
+                                    <span class="text-3xl font-black">${totalPoints.toFixed(1)} <span class="text-sm font-normal opacity-70">pts</span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-slate-300 text-[11px] font-black uppercase tracking-[0.1em] border-b border-slate-100">
+                                    <th class="pb-4 px-2">Développeur</th>
+                                    <th class="pb-4 text-center">Gardien RUN ?</th>
+                                    <th class="pb-4">Jours BUILD</th>
+                                    <th class="pb-4">Capacité (Pts)</th>
+                                    <th class="pb-4 px-2">Notes / Absence</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+
+                        <div class="mt-8 pt-4 flex justify-end">
+                            <button onclick="deleteSprint(${sprint.id})" class="text-red-300 hover:text-red-500 text-[11px] font-black uppercase tracking-[0.2em] transition">
+                                [ Supprimer ce Sprint ]
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        init();
+    </script>
+</body>
+</html>
